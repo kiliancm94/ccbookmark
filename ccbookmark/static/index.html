@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>claude-chat-ui</title>
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <header>
+      <h1>claude-chat-ui</h1>
+      <span class="sub">Save · resume · export Claude Code conversations</span>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="saved">Saved</button>
+      <button class="tab" data-tab="live">Available to save</button>
+    </nav>
+
+    <main>
+      <section id="saved-panel">
+        <div class="toolbar">
+          <input id="search" type="search" placeholder="Filter by text…" />
+          <input id="tag" type="search" placeholder="tag" class="narrow" />
+          <button id="refresh-saved">Refresh</button>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Title</th><th>cwd</th><th>Msgs</th><th>Saved</th><th></th></tr>
+          </thead>
+          <tbody id="saved-rows"></tbody>
+        </table>
+        <p id="saved-empty" class="empty hidden">No saved conversations yet.</p>
+      </section>
+
+      <section id="live-panel" class="hidden">
+        <div class="toolbar">
+          <input id="live-cwd" type="text" placeholder="Filter by project dir (cwd), optional" />
+          <button id="refresh-live">Refresh</button>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Title</th><th>cwd</th><th>Msgs</th><th>Last activity</th><th></th></tr>
+          </thead>
+          <tbody id="live-rows"></tbody>
+        </table>
+        <p id="live-empty" class="empty hidden">No live sessions found.</p>
+      </section>
+    </main>
+
+    <!-- Detail drawer -->
+    <aside id="drawer" class="drawer hidden">
+      <button id="drawer-close" class="close">×</button>
+      <h2 id="d-title"></h2>
+      <code id="d-id" class="mono"></code>
+      <dl id="d-meta"></dl>
+      <div class="actions">
+        <button id="d-restore">Restore (resume)</button>
+        <button id="d-export">Export to project…</button>
+        <button id="d-delete" class="danger">Delete</button>
+      </div>
+      <pre id="d-command" class="command hidden"></pre>
+      <h3>Summary</h3>
+      <pre id="d-summary" class="summary"></pre>
+      <h3 id="d-files-h" class="hidden">Files</h3>
+      <ul id="d-files" class="files"></ul>
+    </aside>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
