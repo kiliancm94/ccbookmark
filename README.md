@@ -8,8 +8,11 @@ jump back into one by id, or seed a conversation into a different project.
 `ccbookmark` does exactly that — from the terminal, from a web UI, or from inside
 Claude Code itself via MCP.
 
+[![CI](https://github.com/kiliancm94/ccbookmark/actions/workflows/ci.yml/badge.svg)](https://github.com/kiliancm94/ccbookmark/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+
+![ccbookmark web UI](docs/screenshot.png)
 
 ---
 
