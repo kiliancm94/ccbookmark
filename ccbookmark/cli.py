@@ -30,10 +30,15 @@ def save(
         None, "--cwd", help="Project dir to save the latest session from."
     ),
     tag: list[str] = typer.Option([], "--tag", help="Tag(s) to attach (repeatable)."),
+    regenerate: bool = typer.Option(
+        False,
+        "--regenerate",
+        help="Rewrite the summary via the Claude API (needs ANTHROPIC_API_KEY).",
+    ),
 ) -> None:
     """Archive a conversation (defaults to the latest session in CWD)."""
     try:
-        meta = core.save(session_id=session_id, cwd=cwd, tags=list(tag))
+        meta = core.save(session_id=session_id, cwd=cwd, tags=list(tag), regenerate=regenerate)
     except core.SaveError as exc:
         _fail(exc)
     console.print(f"[green]Saved[/green] {meta.session_id} — [bold]{meta.title}[/bold]")
@@ -108,10 +113,15 @@ def export(
     session_id: str = typer.Argument(..., help="Saved session id."),
     target_cwd: str = typer.Argument(..., help="Project dir to export into."),
     new_id: bool = typer.Option(False, "--new-id", help="Assign a fresh session id."),
+    rewrite_paths: bool = typer.Option(
+        True,
+        "--rewrite-paths/--no-rewrite-paths",
+        help="Re-path embedded file paths under the original cwd too (default: on).",
+    ),
 ) -> None:
     """Copy a conversation into another project, re-pathing its cwd."""
     try:
-        res = core.export(session_id, target_cwd, new_id=new_id)
+        res = core.export(session_id, target_cwd, new_id=new_id, rewrite_paths=rewrite_paths)
     except core.SaveError as exc:
         _fail(exc)
     console.print(f"[green]Exported to[/green] {res['destination']}")
@@ -120,16 +130,24 @@ def export(
 
 @app.command()
 def delete(
-    session_id: str = typer.Argument(..., help="Saved session id."),
+    session_id: Optional[str] = typer.Argument(None, help="Saved session id (omit for bulk)."),
+    query: Optional[str] = typer.Option(None, "--query", "-q", help="Bulk: delete matches."),
+    tag: list[str] = typer.Option([], "--tag", help="Bulk: delete sessions with tag(s)."),
     purge_archive: bool = typer.Option(False, "--purge", help="Also delete the archived JSONL."),
 ) -> None:
-    """Remove a saved conversation from the library."""
+    """Remove a saved conversation, or bulk-delete by --query / --tag."""
+    if session_id is None and not query and not tag:
+        _fail(core.SaveError("Pass a session id, or --query / --tag for a bulk delete."))
     try:
-        res = core.delete(session_id, purge_archive=purge_archive)
+        if session_id is not None:
+            res = core.delete(session_id, purge_archive=purge_archive)
+            extra = " (archive purged)" if res["archive_purged"] else ""
+            console.print(f"[green]Deleted[/green] {session_id}{extra}")
+        else:
+            res = core.delete_where(query=query, tags=list(tag), purge_archive=purge_archive)
+            console.print(f"[green]Deleted[/green] {res['count']} conversation(s)")
     except core.SaveError as exc:
         _fail(exc)
-    extra = " (archive purged)" if res["archive_purged"] else ""
-    console.print(f"[green]Deleted[/green] {session_id}{extra}")
 
 
 if __name__ == "__main__":

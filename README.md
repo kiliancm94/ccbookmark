@@ -87,10 +87,25 @@ uv run ccbookmark show <session-id>
 # Make a bookmark resumable again, then run the printed command
 uv run ccbookmark restore <session-id>
 
-# Copy a conversation into another project (fresh id avoids collisions)
+# Copy a conversation into another project (fresh id avoids collisions);
+# embedded file paths under the old cwd are re-pathed too (--no-rewrite-paths to skip)
 uv run ccbookmark export <session-id> /path/to/other/repo --new-id
 
+# Delete one, or bulk-delete by tag / text query
 uv run ccbookmark delete <session-id> --purge
+uv run ccbookmark delete --tag scratch --purge
+```
+
+### Optional: richer summaries via the Claude API
+
+Summaries are extracted from the JSONL by default (no key, no cost). To rewrite a
+summary with the Claude API instead, install the extra and set a key:
+
+```bash
+uv sync --extra summary           # adds the `anthropic` dependency
+export ANTHROPIC_API_KEY=sk-ant-...
+uv run ccbookmark save --regenerate
+# model defaults to claude-opus-4-8; override with CCBOOKMARK_SUMMARY_MODEL
 ```
 
 ## Web UI
@@ -160,10 +175,11 @@ the **curated, cross‑project‑exportable library over CLI + MCP + web** is wh
 
 - **Restore** only copies the JSONL back if it's missing; it never overwrites a
   live session.
-- **Export** rewrites the top‑level `cwd` (and `sessionId` with `--new-id`) in
-  every record. File references *inside* the transcript keep their original
-  absolute paths, so the history is preserved but file context points at the
-  original location.
+- **Export** rewrites the top‑level `cwd` (and `sessionId` with `--new-id`) and,
+  by default, any embedded file path under the original cwd — so file references
+  follow the conversation to the new project. Pass `--no-rewrite-paths` to keep the
+  original absolute paths. Content that merely *mentions* a path (not a path value)
+  is left untouched.
 
 ## Development
 

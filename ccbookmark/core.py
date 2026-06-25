@@ -12,8 +12,8 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import paths, store
-from .parser import SessionMeta, parse_session
+from . import paths, store, summarize
+from .parser import SessionMeta, extract_transcript_text, parse_session
 
 
 class SaveError(Exception):
@@ -39,15 +39,26 @@ def _resolve_live_session(session_id: str | None, cwd: str | None) -> tuple[str,
 
 
 def save(
-    session_id: str | None = None, cwd: str | None = None, tags: list[str] | None = None
+    session_id: str | None = None,
+    cwd: str | None = None,
+    tags: list[str] | None = None,
+    regenerate: bool = False,
 ) -> SessionMeta:
     """Archive a live session JSONL and index its metadata.
 
     With no ``session_id`` the most recently modified session in ``cwd`` (or the
-    process cwd) is saved.
+    process cwd) is saved. When ``regenerate`` is set, the summary is rewritten
+    via the Claude API instead of extracted (requires the ``summary`` extra and
+    ``ANTHROPIC_API_KEY``).
     """
     sid, live_path = _resolve_live_session(session_id, cwd)
     meta = parse_session(live_path, session_id=sid)
+
+    if regenerate:
+        try:
+            meta.summary = summarize.regenerate_summary(extract_transcript_text(live_path))
+        except summarize.SummaryError as exc:
+            raise SaveError(str(exc)) from exc
 
     paths.archive_dir().mkdir(parents=True, exist_ok=True)
     archive_path = paths.archive_dir() / f"{sid}.jsonl"
@@ -143,15 +154,40 @@ def restore(session_id: str) -> dict:
     }
 
 
-def export(session_id: str, target_cwd: str, new_id: bool = False) -> dict:
+def _rewrite_paths(obj: object, old: str, new: str) -> object:
+    """Recursively replace ``old`` cwd prefixes with ``new`` in any string value.
+
+    Rewrites a string that equals ``old`` or starts with ``old + "/"`` — this
+    catches the top-level ``cwd`` plus embedded file paths in tool inputs and file
+    attachments, so file references follow the conversation to the new project.
+    """
+    if isinstance(obj, str):
+        if obj == old:
+            return new
+        if obj.startswith(old + "/"):
+            return new + obj[len(old) :]
+        return obj
+    if isinstance(obj, list):
+        return [_rewrite_paths(v, old, new) for v in obj]
+    if isinstance(obj, dict):
+        return {k: _rewrite_paths(v, old, new) for k, v in obj.items()}
+    return obj
+
+
+def export(
+    session_id: str, target_cwd: str, new_id: bool = False, rewrite_paths: bool = True
+) -> dict:
     """Copy a saved conversation into another project so it resumes there.
 
-    Rewrites each record's ``cwd`` to ``target_cwd``. When ``new_id`` is set, a
-    fresh session id is assigned (rewriting ``sessionId`` and the filename) to
-    avoid colliding with an existing session in the target project.
+    Rewrites each record's ``cwd`` to ``target_cwd``. When ``rewrite_paths`` is set
+    (the default), embedded file paths under the original cwd are re-pathed too, so
+    file references follow the move. When ``new_id`` is set, a fresh session id is
+    assigned (rewriting ``sessionId`` and the filename) to avoid colliding with an
+    existing session in the target project.
     """
     row = show(session_id)
     src = _archived_path(row)
+    old_cwd = row["cwd"]
     out_id = str(uuid.uuid4()) if new_id else session_id
     dest = paths.session_file(target_cwd, out_id)
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -166,6 +202,9 @@ def export(session_id: str, target_cwd: str, new_id: bool = False) -> dict:
             except json.JSONDecodeError:
                 fout.write(line + "\n")
                 continue
+            if rewrite_paths and old_cwd:
+                rec = _rewrite_paths(rec, old_cwd, target_cwd)
+                assert isinstance(rec, dict)
             if "cwd" in rec:
                 rec["cwd"] = target_cwd
             if new_id and "sessionId" in rec:
@@ -178,6 +217,27 @@ def export(session_id: str, target_cwd: str, new_id: bool = False) -> dict:
         "destination": str(dest),
         "command": f"cd {target_cwd} && claude --resume {out_id}",
     }
+
+
+def _require_filter(query: str | None, tags: list[str] | None) -> None:
+    if not query and not tags:
+        raise SaveError("Refusing a bulk operation without a --query or --tag filter.")
+
+
+def export_where(
+    target_cwd: str,
+    query: str | None = None,
+    tags: list[str] | None = None,
+    new_id: bool = False,
+    rewrite_paths: bool = True,
+) -> list[dict]:
+    """Export every saved conversation matching ``query``/``tags`` into a project."""
+    _require_filter(query, tags)
+    rows = store.search(query=query, tags=tags, limit=1000)
+    return [
+        export(r["session_id"], target_cwd, new_id=new_id, rewrite_paths=rewrite_paths)
+        for r in rows
+    ]
 
 
 def delete(session_id: str, purge_archive: bool = False) -> dict:
@@ -193,3 +253,16 @@ def delete(session_id: str, purge_archive: bool = False) -> dict:
             archive_path.unlink()
             purged = True
     return {"session_id": session_id, "deleted": True, "archive_purged": purged}
+
+
+def delete_where(
+    query: str | None = None, tags: list[str] | None = None, purge_archive: bool = False
+) -> dict:
+    """Delete every saved conversation matching ``query``/``tags``.
+
+    Requires at least one filter — refuses to wipe the whole library by accident.
+    """
+    _require_filter(query, tags)
+    rows = store.search(query=query, tags=tags, limit=1000)
+    deleted = [delete(r["session_id"], purge_archive=purge_archive)["session_id"] for r in rows]
+    return {"deleted": deleted, "count": len(deleted)}

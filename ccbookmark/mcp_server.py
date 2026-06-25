@@ -23,14 +23,16 @@ def save_conversation(
     session_id: str | None = None,
     cwd: str | None = None,
     tags: list[str] | None = None,
+    regenerate: bool = False,
 ) -> dict:
     """Save a Claude Code conversation to the library.
 
     Without ``session_id`` the most recently modified session in ``cwd`` (or the
     server's working directory) is saved. An MCP server cannot reliably know the
-    *current* session id, so pass one explicitly to be certain.
+    *current* session id, so pass one explicitly to be certain. Set ``regenerate``
+    to rewrite the summary via the Claude API (needs the ``summary`` extra + key).
     """
-    meta = core.save(session_id=session_id, cwd=cwd, tags=tags or [])
+    meta = core.save(session_id=session_id, cwd=cwd, tags=tags or [], regenerate=regenerate)
     return {
         "session_id": meta.session_id,
         "title": meta.title,
@@ -64,15 +66,46 @@ def restore_conversation(session_id: str) -> dict:
 
 
 @mcp.tool()
-def export_conversation(session_id: str, target_cwd: str, new_id: bool = False) -> dict:
-    """Copy a saved conversation into another project, re-pathing its cwd."""
-    return core.export(session_id, target_cwd, new_id=new_id)
+def export_conversation(
+    session_id: str, target_cwd: str, new_id: bool = False, rewrite_paths: bool = True
+) -> dict:
+    """Copy a saved conversation into another project, re-pathing its cwd.
+
+    With ``rewrite_paths`` (default), embedded file paths under the original cwd are
+    re-pathed too so file references follow the move.
+    """
+    return core.export(session_id, target_cwd, new_id=new_id, rewrite_paths=rewrite_paths)
 
 
 @mcp.tool()
 def delete_saved(session_id: str, purge_archive: bool = False) -> dict:
     """Remove a saved conversation from the library."""
     return core.delete(session_id, purge_archive=purge_archive)
+
+
+@mcp.tool()
+def bulk_delete(
+    query: str | None = None, tags: list[str] | None = None, purge_archive: bool = False
+) -> dict:
+    """Delete every saved conversation matching a text query and/or tags.
+
+    Requires at least one filter (refuses to wipe the whole library).
+    """
+    return core.delete_where(query=query, tags=tags or None, purge_archive=purge_archive)
+
+
+@mcp.tool()
+def bulk_export(
+    target_cwd: str,
+    query: str | None = None,
+    tags: list[str] | None = None,
+    new_id: bool = False,
+    rewrite_paths: bool = True,
+) -> list[dict]:
+    """Export every saved conversation matching a text query and/or tags into a project."""
+    return core.export_where(
+        target_cwd, query=query, tags=tags or None, new_id=new_id, rewrite_paths=rewrite_paths
+    )
 
 
 def main() -> None:

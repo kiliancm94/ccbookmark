@@ -58,7 +58,6 @@ def test_export_repaths_cwd(env):
     dest = Path(res["destination"])
     assert dest.is_file()
     assert "-tmp-other-proj" in str(dest.parent)
-    # Every record's top-level cwd is re-pathed; embedded file paths are not.
     import json
 
     for line in dest.read_text().splitlines():
@@ -67,6 +66,35 @@ def test_export_repaths_cwd(env):
             assert rec["cwd"] == "/tmp/other-proj"
         if "sessionId" in rec:
             assert rec["sessionId"] == res["session_id"]
+
+
+def test_export_rewrites_embedded_paths_by_default(env):
+    core.save(session_id=SESSION_ID)
+    res = core.export(SESSION_ID, "/tmp/other-proj")
+    content = Path(res["destination"]).read_text()
+    # The Write tool input file_path under the old cwd follows the move.
+    assert "/tmp/other-proj/parser.py" in content
+    assert "/tmp/demo-proj" not in content
+
+
+def test_export_no_rewrite_paths_keeps_embedded_paths(env):
+    core.save(session_id=SESSION_ID)
+    res = core.export(SESSION_ID, "/tmp/other-proj", rewrite_paths=False)
+    content = Path(res["destination"]).read_text()
+    assert "/tmp/demo-proj/parser.py" in content  # embedded path untouched
+
+
+def test_delete_where_by_tag(env):
+    core.save(session_id=SESSION_ID, tags=["sweep"])
+    res = core.delete_where(tags=["sweep"], purge_archive=True)
+    assert res["count"] == 1
+    assert core.list_saved() == []
+
+
+def test_delete_where_requires_filter(env):
+    core.save(session_id=SESSION_ID)
+    with pytest.raises(core.SaveError):
+        core.delete_where()  # no query/tags → refuse
 
 
 def test_delete(env):

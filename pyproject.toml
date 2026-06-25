@@ -1,6 +1,6 @@
 [project]
 name = "ccbookmark"
-version = "0.1.0"
+version = "0.2.0"
 description = "Bookmark, resume, and export Claude Code conversations by session id."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,10 +20,14 @@ Homepage = "https://github.com/kiliancm94/ccbookmark"
 Repository = "https://github.com/kiliancm94/ccbookmark"
 
 [project.optional-dependencies]
+summary = [
+    "anthropic>=0.40.0",
+]
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.6.0",
     "pyright>=1.1.0",
+    "anthropic>=0.40.0",
 ]
 
 [project.scripts]

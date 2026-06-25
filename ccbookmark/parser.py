@@ -129,6 +129,28 @@ def parse_session(path: Path, session_id: str | None = None) -> SessionMeta:
     return meta
 
 
+def extract_transcript_text(path: Path, max_chars: int = 60_000) -> str:
+    """Concatenate the human-readable user/assistant text of a session.
+
+    Used to feed an optional Claude-API summary regeneration. Streams the JSONL
+    and stops once ``max_chars`` is reached.
+    """
+    parts: list[str] = []
+    total = 0
+    for rec in _iter_records(path):
+        if rec.get("type") not in ("user", "assistant"):
+            continue
+        text = _text_from_content(rec.get("message", {}).get("content"))
+        if not text:
+            continue
+        chunk = f"{rec['type']}: {text}"
+        parts.append(chunk)
+        total += len(chunk)
+        if total >= max_chars:
+            break
+    return "\n\n".join(parts)[:max_chars]
+
+
 def _first_line(text: str, limit: int = 120) -> str:
     line = text.strip().splitlines()[0] if text.strip() else ""
     return line[:limit]
